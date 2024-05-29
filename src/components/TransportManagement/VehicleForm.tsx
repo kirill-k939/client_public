@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { IMaskInput } from 'react-imask';
 
-import { Button, Container, MenuItem, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Container,
+  MenuItem,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material';
 
-import { ITransport } from '@app/models';
+import FormControlLabel from '@mui/material/FormControlLabel';
+
+
+import { AddTransport, ITransport } from '@app/models';
 import { useStore } from '@app/store.tsx';
-import { v4Int } from '@app/utils';
-
-export type TransportAddState = Pick<
-  ITransport,
-  'typeId' | 'regNumber' | 'mileage' | 'createdAt' | 'id'
->;
 
 type TransportAddFormProps = {
-  onApply: (state: TransportAddState) => void;
+  onApply: (state: AddTransport, edit: boolean) => void;
+  editRow: ITransport | null;
 };
 
 type ViewType = {
@@ -48,7 +54,7 @@ const MaskedInput = React.forwardRef<HTMLElement, MaskedInputProps>((props, ref)
     />
   );
 });
-const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
+const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply, editRow }) => {
   const store = useStore();
 
   const vehicleTypes = Object.keys(store.appStore.transportTypes).map((id) => {
@@ -56,9 +62,30 @@ const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
   });
 
   const [hasRegError, setHasRegError] = useState(false);
-  const [type, setType] = useState<ViewType>(vehicleTypes[0]);
-  const [regNumber, setRegNumber] = useState<TransportAddState['regNumber']>('');
-  const [mileage, setMileage] = useState<TransportAddState['mileage']>('');
+
+  const [hasConsumptionError, setHasConsumptionError] = useState(false);
+
+  const [type, setType] = useState<ViewType>(
+    editRow
+      ? (vehicleTypes.find((i) => i.id == editRow.typeId) as ViewType)
+      : vehicleTypes[0],
+  );
+  const [regNumber, setRegNumber] = useState<AddTransport['regNumber']>(
+    editRow ? editRow.regNumber || '' : '',
+  );
+  const [name, setName] = useState<AddTransport['name']>(
+    editRow ? editRow.name || '' : '',
+  );
+
+  const [consumption, setConsumption] = useState<number | undefined>(
+    editRow ? editRow.avgConsumption : undefined,
+
+  );
+  const [unit, setUnit] = useState<AddTransport['unit']>(editRow ? editRow.unit : 'L');
+
+  const onChangeUnit = (event: React.ChangeEvent<HTMLInputElement>) => {
+    event.target.checked ? setUnit('Kv') : setUnit('L');
+  };
 
   const validateRegNumber = () => {
     if (regNumber?.length && regNumber.length >= 7) {
@@ -68,6 +95,15 @@ const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
     }
   };
 
+  const validateConsumption = () => {
+    if (regNumber?.length) {
+      setHasConsumptionError(false);
+    } else {
+      setHasConsumptionError(true);
+    }
+  };
+
+
   const onSetTransportType = (value: ViewType['id']) => {
     const vehicleType = vehicleTypes.find((i) => i.id === value);
     vehicleType && setType(vehicleType);
@@ -76,7 +112,16 @@ const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (hasRegError) return;
-    onApply({ typeId: type.id, regNumber, mileage, createdAt: new Date(), id: v4Int() });
+    onApply(
+      {
+        typeId: parseInt(type.id),
+        regNumber,
+        name,
+        unit,
+        avgConsumption: consumption,
+      },
+      !!editRow,
+    );
   };
 
   return (
@@ -101,7 +146,6 @@ const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
             </MenuItem>
           ))}
         </TextField>
-
         <TextField
           label="Гос. номер"
           value={regNumber}
@@ -124,23 +168,52 @@ const VehicleForm: React.FC<TransportAddFormProps> = ({ onApply }) => {
             },
           }}
         />
-
         <TextField
-          label="Пробег *"
-          name="mileage" // This must match the state object's property name
-          value={mileage}
-          onChange={({ target }) => setMileage(target.value)}
+          label="Название"
+          name="name" // This must match the state object's property name
+          value={name}
+          onChange={({ target }) => setName(target.value)}
           required
           fullWidth
           margin="normal"
           variant="outlined"
         />
+        <Box display="flex" justifyContent="space-between">
+          <TextField
+            label="Расход на 100 км"
+
+            value={consumption}
+            name={'avgConsumption'}
+            required
+            type={'number'}
+            onChange={(value: unknown) => setConsumption(value as number)}
+            margin="normal"
+            variant="outlined"
+            error={hasConsumptionError}
+            helperText={hasConsumptionError && 'Поле должно быть заполнено'}
+            onBlur={validateConsumption}
+            InputProps={{
+              /* @ts-expect-error: input component error */
+              inputComponent: MaskedInput,
+              inputProps: {
+                mask: Number,
+                scale: 0,
+              },
+            }}
+          />
+          <FormControlLabel
+            control={<Switch onChange={onChangeUnit} />}
+            className={'bold'}
+            label="У меня электрокар"
+          />
+        </Box>
+
         <Button
           type="submit"
           variant="contained"
           color="primary"
           style={{ marginTop: '16px' }}>
-          Submit
+          {editRow ? 'Изменить' : 'Добавить'}
         </Button>
       </form>
     </Container>
